@@ -32,13 +32,7 @@
       width:260px; background:var(--bg-900); display:flex; flex-direction:column; border-right:1px solid #00000020;
     }
     .channels .header{
-      padding:12px; border-bottom:1px solid #00000020; display:flex; flex-direction:column; gap:8px;
-    }
-    .username{
-      display:flex; gap:8px;
-    }
-    .username input{
-      flex:1; background:var(--bg-700); border:none; outline:none; color:#fff; padding:8px 10px; border-radius:6px;
+      padding:12px; border-bottom:1px solid #00000020; font-weight:700;
     }
     .channel-list{ padding:8px; overflow:auto }
     .chan{
@@ -79,15 +73,37 @@
       background:var(--primary); color:#fff; border:none; padding:0 16px; border-radius:8px; cursor:pointer; font-weight:600;
     }
     .composer button:disabled{ opacity:.6; cursor:not-allowed }
+    /* Members Sidebar */
+    .members{
+      width:240px; background:var(--bg-900); border-left:1px solid #00000020;
+      display:flex; flex-direction:column; overflow:auto;
+    }
+    .members .section{
+      padding:8px 12px; font-size:12px; font-weight:700; color:var(--text-soft);
+    }
+    .member{
+      display:flex; align-items:center; gap:10px; padding:6px 12px; border-radius:6px;
+    }
+    .member:hover{ background:var(--bg-600); }
+    .avatar{
+      width:32px; height:32px; border-radius:50%; background:var(--bg-700); flex-shrink:0;
+      position:relative; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600;
+    }
+    .status{
+      position:absolute; bottom:0; right:0; width:10px; height:10px; border:2px solid var(--bg-900); border-radius:50%;
+    }
+    .status.online{ background:var(--success); }
+    .status.offline{ background:var(--danger); }
     /* Small screens */
     @media (max-width:900px){
       .servers{ display:none }
       .channels{ width:200px }
+      .members{ display:none }
     }
   </style>
 </head>
 <body>
-  <!-- Servers rail (cosmetic demo) -->
+  <!-- Servers rail -->
   <aside class="servers" id="servers">
     <div class="server-dot active" data-server="home" title="Home">H</div>
     <div class="server-dot" data-server="games" title="Games">G</div>
@@ -97,15 +113,8 @@
 
   <!-- Channels column -->
   <aside class="channels">
-    <div class="header">
-      <div style="font-weight:700">Channels</div>
-      <div class="username">
-        <input id="username" placeholder="Enter your name" />
-      </div>
-    </div>
-    <div class="channel-list" id="channelList">
-      <!-- Populated by JS -->
-    </div>
+    <div class="header">Channels</div>
+    <div class="channel-list" id="channelList"></div>
   </aside>
 
   <!-- Main chat -->
@@ -120,6 +129,9 @@
     </div>
   </main>
 
+  <!-- Members sidebar -->
+  <aside class="members" id="members"></aside>
+
   <script>
     // ---- Client state ----
     const socket = io();
@@ -133,14 +145,15 @@
 
     let currentServer = defaultServer;
     let currentRoom = "general";
+    let currentUser = "User" + Math.floor(Math.random()*1000);
 
     // ---- DOM refs ----
     const channelList = document.getElementById("channelList");
     const roomTitle = document.getElementById("roomTitle");
     const msgBox = document.getElementById("messages");
-    const usernameEl = document.getElementById("username");
     const inputEl = document.getElementById("messageInput");
     const sendBtn = document.getElementById("sendBtn");
+    const membersBox = document.getElementById("members");
 
     // ---- Helpers ----
     function fmtTime(ts){
@@ -149,9 +162,7 @@
       const mm = String(d.getMinutes()).padStart(2,"0");
       return `${hh}:${mm}`;
     }
-    function scrollToBottom(){
-      msgBox.scrollTop = msgBox.scrollHeight;
-    }
+    function scrollToBottom(){ msgBox.scrollTop = msgBox.scrollHeight; }
     function setPlaceholder(){
       inputEl.placeholder = `Message #${currentRoom}`;
       roomTitle.textContent = currentRoom;
@@ -178,11 +189,34 @@
       });
     }
 
+    // ---- Members rendering ----
+    function renderMembers(list){
+      membersBox.innerHTML = "";
+      const online = list.filter(u=>u.online);
+      const offline = list.filter(u=>!u.online);
+
+      if (online.length){
+        membersBox.appendChild(el("div","section","ONLINE — "+online.length));
+        online.forEach(user => membersBox.appendChild(makeMember(user)));
+      }
+      if (offline.length){
+        membersBox.appendChild(el("div","section","OFFLINE — "+offline.length));
+        offline.forEach(user => membersBox.appendChild(makeMember(user)));
+      }
+    }
+    function makeMember(user){
+      const row = el("div","member","");
+      const avatar = el("div","avatar",user.name[0].toUpperCase());
+      const status = el("div","status " + (user.online?"online":"offline"));
+      avatar.appendChild(status);
+      row.appendChild(avatar);
+      row.appendChild(el("div","",user.name));
+      return row;
+    }
+
     // ---- Room changes ----
     function join(room){
-      const user = (usernameEl.value || "Anonymous").trim() || "Anonymous";
-      socket.emit("join", { room, user });
-      // Clear chat view when changing room (client-side only)
+      socket.emit("join", { room, user: currentUser });
       msgBox.innerHTML = "";
       setPlaceholder();
       scrollToBottom();
@@ -197,21 +231,19 @@
     function send(){
       const text = inputEl.value.trim();
       if (!text) return;
-      const user = (usernameEl.value || "Anonymous").trim() || "Anonymous";
-      socket.emit("chat", { room: currentRoom, user, text });
+      socket.emit("chat", { room: currentRoom, user: currentUser, text });
       inputEl.value = "";
     }
 
     // ---- Socket events ----
     socket.on("chat", (msg) => {
-      if (msg.room !== currentRoom) return; // ignore other rooms
+      if (msg.room !== currentRoom) return;
       const wrap = el("div", "msg");
       const meta = el("div", "meta");
-      const author = el("span", "author", msg.user);
-      const time = el("span", "time", fmtTime(msg.ts || Date.now()));
-      meta.appendChild(author); meta.appendChild(time);
-      const text = el("div", "text", msg.text);
-      wrap.appendChild(meta); wrap.appendChild(text);
+      meta.appendChild(el("span", "author", msg.user));
+      meta.appendChild(el("span", "time", fmtTime(msg.ts || Date.now())));
+      wrap.appendChild(meta);
+      wrap.appendChild(el("div", "text", msg.text));
       msgBox.appendChild(wrap);
       scrollToBottom();
     });
@@ -220,13 +252,16 @@
       if (msg.room !== currentRoom) return;
       const wrap = el("div", "msg system");
       const meta = el("div", "meta");
-      const author = el("span", "author", "System");
-      const time = el("span", "time", fmtTime(msg.ts || Date.now()));
-      meta.appendChild(author); meta.appendChild(time);
-      const text = el("div", "text", msg.text);
-      wrap.appendChild(meta); wrap.appendChild(text);
+      meta.appendChild(el("span", "author", "System"));
+      meta.appendChild(el("span", "time", fmtTime(msg.ts || Date.now())));
+      wrap.appendChild(meta);
+      wrap.appendChild(el("div", "text", msg.text));
       msgBox.appendChild(wrap);
       scrollToBottom();
+    });
+
+    socket.on("members", (list)=>{
+      renderMembers(list);
     });
 
     // ---- UI wiring ----
@@ -246,7 +281,6 @@
       if (targetServer === currentServer) return;
       currentServer = targetServer;
       setActiveServerDot();
-      // Default to first channel of that server
       currentRoom = (serverChannels[currentServer] && serverChannels[currentServer][0]) || "general";
       renderChannels();
       join(currentRoom);

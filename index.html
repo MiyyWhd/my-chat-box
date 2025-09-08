@@ -2,261 +2,876 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Mini Discord</title>
+  <title>PCC Hub</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
   <style>
     :root{
-      --bg-900:#202225; --bg-800:#2f3136; --bg-700:#36393f; --bg-600:#40444b; --primary:#7289da;
-      --text:#dcddde; --text-soft:#b9bbbe; --danger:#ed4245; --success:#3ba55d;
+      --bg-primary: #2f3136;
+      --bg-secondary: #36393f;
+      --bg-tertiary: #40444b;
+      --bg-channel: #2f3136;
+      --accent: #5865f2;
+      --text-primary: #ffffff;
+      --text-secondary: #b9bbbe;
+      --text-muted: #72767d;
+      --text-link: #00aff4;
+      --green: #3ba55c;
+      --red: #ed4245;
+      --yellow: #fee75c;
+      --orange: #ff7a00;
+      --purple: #9c84ef;
+      --pink: #eb459e;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0; background:var(--bg-800); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      display:flex; min-height:100vh; overflow:hidden;
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: "Whitney", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
     }
-    /* Left server rail */
-    .servers{
-      width:72px; background:var(--bg-900); padding:12px 8px; display:flex; flex-direction:column; gap:12px; align-items:center;
+    
+    /* Server List */
+    .server-list {
+      width: 72px;
+      background: var(--bg-tertiary);
+      padding: 12px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      overflow-y: auto;
     }
-    .server-dot{
-      width:48px; height:48px; border-radius:16px; background:var(--bg-700); display:grid; place-items:center;
-      cursor:pointer; transition:transform .1s, background .2s, box-shadow .2s;
-      user-select:none; font-weight:700;
+    
+    .server-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 24px;
+      background: var(--bg-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: border-radius 0.2s, background 0.2s;
+      position: relative;
+      font-weight: 600;
+      font-size: 16px;
     }
-    .server-dot.active{ background:var(--primary); box-shadow:0 0 0 2px rgba(0,0,0,.2) inset; }
-    .server-dot:hover{ transform:translateY(-1px) }
-    /* Channel column */
-    .channels{
-      width:260px; background:var(--bg-900); display:flex; flex-direction:column; border-right:1px solid #00000020;
+    
+    .server-icon.active {
+      border-radius: 16px;
+      background: var(--accent);
     }
-    .channels .header{
-      padding:12px; border-bottom:1px solid #00000020; display:flex; flex-direction:column; gap:8px;
+    
+    .server-icon:hover {
+      border-radius: 16px;
+      background: var(--accent);
     }
-    .username{
-      display:flex; gap:8px;
+    
+    .server-icon.active::before {
+      content: '';
+      position: absolute;
+      left: -16px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 4px;
+      height: 40px;
+      background: white;
+      border-radius: 0 2px 2px 0;
     }
-    .username input{
-      flex:1; background:var(--bg-700); border:none; outline:none; color:#fff; padding:8px 10px; border-radius:6px;
+    
+    /* Channel Sidebar */
+    .channel-sidebar {
+      width: 240px;
+      background: var(--bg-channel);
+      display: flex;
+      flex-direction: column;
     }
-    .channel-list{ padding:8px; overflow:auto }
-    .chan{
-      padding:8px 10px; border-radius:6px; color:var(--text-soft); display:flex; align-items:center; gap:8px; cursor:pointer;
+    
+    .server-header {
+      height: 48px;
+      padding: 0 16px;
+      border-bottom: 1px solid rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
     }
-    .chan.active{ background:var(--bg-700); color:#fff }
-    .chan:hover{ background:var(--bg-600); color:#fff }
-    /* Main chat area */
-    .chat{
-      flex:1; display:flex; flex-direction:column; background:var(--bg-700);
+    
+    .server-header:hover {
+      background: rgba(255,255,255,0.02);
     }
-    .chat .topbar{
-      height:48px; border-bottom:1px solid #00000020; display:flex; align-items:center; gap:10px; padding:0 16px;
-      background:var(--bg-700); position:sticky; top:0; z-index:10;
+    
+    .channel-list {
+      flex: 1;
+      padding: 16px 8px;
+      overflow-y: auto;
     }
-    .hash{ color:var(--text-soft) }
-    .title{ font-weight:700 }
-    .messages{
-      flex:1; overflow:auto; padding:16px;
+    
+    .channel-category {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 16px 8px 0 8px;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
-    .msg{
-      margin-bottom:12px; line-height:1.3;
+    
+    .channel-category:first-child {
+      padding-top: 0;
     }
-    .msg .meta{
-      display:flex; align-items:baseline; gap:8px; margin-bottom:2px;
+    
+    .channel {
+      display: flex;
+      align-items: center;
+      padding: 6px 8px;
+      margin: 1px 0;
+      border-radius: 4px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.1s;
     }
-    .msg .author{ font-weight:700; color:#fff }
-    .msg .time{ font-size:12px; color:var(--text-soft) }
-    .msg .text{ white-space:pre-wrap; color:var(--text) }
-    .msg.system .author{ color:var(--primary) }
-    .composer{
-      padding:12px; border-top:1px solid #00000020; background:var(--bg-700); display:flex; gap:10px;
+    
+    .channel:hover {
+      background: rgba(79,84,92,0.16);
+      color: var(--text-primary);
     }
-    .composer input{
-      flex:1; background:var(--bg-600); border:none; outline:none; color:#fff; padding:12px; border-radius:8px;
+    
+    .channel.active {
+      background: rgba(79,84,92,0.32);
+      color: var(--text-primary);
     }
-    .composer button{
-      background:var(--primary); color:#fff; border:none; padding:0 16px; border-radius:8px; cursor:pointer; font-weight:600;
+    
+    .channel-icon {
+      margin-right: 6px;
+      font-size: 20px;
+      color: var(--text-muted);
     }
-    .composer button:disabled{ opacity:.6; cursor:not-allowed }
-    /* Small screens */
-    @media (max-width:900px){
-      .servers{ display:none }
-      .channels{ width:200px }
+    
+    .channel.active .channel-icon {
+      color: var(--text-primary);
+    }
+    
+    .voice-channel .channel-icon {
+      font-size: 16px;
+    }
+    
+    /* User Panel */
+    .user-panel {
+      height: 52px;
+      background: rgba(32,34,37,0.3);
+      padding: 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .username {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .user-status {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    
+    /* Main Chat Area */
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-primary);
+    }
+    
+    .chat-header {
+      height: 48px;
+      border-bottom: 1px solid rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 8px;
+    }
+    
+    .chat-header .channel-icon {
+      color: var(--text-muted);
+      font-size: 24px;
+    }
+    
+    .channel-name {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .channel-description {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-left: auto;
+    }
+    
+    /* Messages */
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 16px 0 16px;
+    }
+    
+    .welcome-message {
+      text-align: left;
+      margin-bottom: 16px;
+      padding: 16px;
+      background: rgba(88, 101, 242, 0.1);
+      border-radius: 8px;
+      border-left: 4px solid var(--accent);
+    }
+    
+    .welcome-message h2 {
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      font-size: 20px;
+    }
+    
+    .welcome-message p {
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    
+    .message {
+      display: flex;
+      padding: 2px 16px;
+      margin-bottom: 17px;
+      position: relative;
+    }
+    
+    .message:hover {
+      background: rgba(4,4,5,0.07);
+    }
+    
+    .message-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin-right: 16px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .message-content {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .message-header {
+      display: flex;
+      align-items: baseline;
+      margin-bottom: 2px;
+    }
+    
+    .message-author {
+      font-weight: 600;
+      font-size: 16px;
+      margin-right: 8px;
+      color: var(--text-primary);
+    }
+    
+    .message-timestamp {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-right: 8px;
+    }
+    
+    .user-badge {
+      background: var(--accent);
+      color: white;
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-right: 4px;
+    }
+    
+    .user-badge.moderator {
+      background: var(--green);
+    }
+    
+    .user-badge.student {
+      background: var(--orange);
+    }
+    
+    .message-text {
+      line-height: 1.375;
+      font-size: 16px;
+      color: var(--text-primary);
+      word-wrap: break-word;
+    }
+    
+    .message-reactions {
+      display: flex;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    
+    .reaction {
+      background: rgba(79,84,92,0.16);
+      border: 1px solid transparent;
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      cursor: pointer;
+    }
+    
+    .reaction:hover {
+      background: rgba(79,84,92,0.24);
+      border-color: rgba(79,84,92,0.48);
+    }
+    
+    /* Message Input */
+    .message-input-container {
+      padding: 16px;
+    }
+    
+    .message-input-wrapper {
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 11px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .message-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-size: 16px;
+      line-height: 1.375;
+      resize: none;
+      max-height: 144px;
+      min-height: 22px;
+    }
+    
+    .message-input::placeholder {
+      color: var(--text-muted);
+    }
+    
+    .send-button {
+      background: var(--accent);
+      border: none;
+      border-radius: 3px;
+      color: white;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 16px;
+      text-transform: uppercase;
+    }
+    
+    .send-button:hover {
+      background: #4752c4;
+    }
+    
+    .send-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    /* Online Users */
+    .members-sidebar {
+      width: 240px;
+      background: var(--bg-channel);
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid rgba(0,0,0,0.2);
+    }
+    
+    .members-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 8px;
+    }
+    
+    .member-category {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 16px 8px 8px;
+      letter-spacing: 0.02em;
+    }
+    
+    .member-category:first-child {
+      padding-top: 8px;
+    }
+    
+    .member {
+      display: flex;
+      align-items: center;
+      padding: 1px 8px;
+      margin: 1px 0;
+      border-radius: 4px;
+      cursor: pointer;
+      height: 42px;
+    }
+    
+    .member:hover {
+      background: rgba(79,84,92,0.16);
+    }
+    
+    .member-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      margin-right: 12px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    
+    .member-avatar::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 3px solid var(--bg-channel);
+    }
+    
+    .member-avatar.online::after {
+      background: var(--green);
+    }
+    
+    .member-avatar.away::after {
+      background: var(--yellow);
+    }
+    
+    .member-avatar.offline::after {
+      background: var(--text-muted);
+    }
+    
+    .member-info {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .member-name {
+      font-size: 16px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .member.offline .member-name {
+      color: var(--text-muted);
+    }
+    
+    /* Avatar Colors */
+    .avatar-p { background: var(--purple); }
+    .avatar-a { background: var(--accent); }
+    .avatar-s { background: var(--green); }
+    .avatar-c { background: var(--purple); }
+    .avatar-m { background: var(--orange); }
+    .avatar-e { background: var(--pink); }
+    .avatar-d { background: var(--text-muted); }
+    .avatar-l { background: var(--pink); }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .server-list { display: none; }
+      .channel-sidebar { width: 200px; }
+      .members-sidebar { display: none; }
     }
   </style>
 </head>
 <body>
-  <!-- Servers rail (cosmetic demo) -->
-  <aside class="servers" id="servers">
-    <div class="server-dot active" data-server="home" title="Home">H</div>
-    <div class="server-dot" data-server="games" title="Games">G</div>
-    <div class="server-dot" data-server="study" title="Study">S</div>
-    <div class="server-dot" data-server="music" title="Music">M</div>
-  </aside>
+  <!-- Server List -->
+  <div class="server-list">
+    <div class="server-icon active avatar-p" data-server="home" title="PCC Hub">P</div>
+    <div class="server-icon avatar-s" data-server="study" title="Study">S</div>
+    <div class="server-icon avatar-p" data-server="projects" title="Projects">F</div>
+    <div class="server-icon avatar-m" data-server="social" title="Social">🎵</div>
+  </div>
 
-  <!-- Channels column -->
-  <aside class="channels">
-    <div class="header">
-      <div style="font-weight:700">Channels</div>
-      <div class="username">
-        <input id="username" placeholder="Enter your name" />
+  <!-- Channel Sidebar -->
+  <div class="channel-sidebar">
+    <div class="server-header" id="serverName">
+      PCC Hub
+    </div>
+    
+    <div class="channel-list">
+      <div class="channel-category">
+        TEXT CHANNELS
+        <span>+</span>
+      </div>
+      <div id="textChannels">
+        <!-- Will be populated by JavaScript -->
+      </div>
+      
+      <div class="channel-category">
+        VOICE CHANNELS
+        <span>+</span>
+      </div>
+      <div id="voiceChannels">
+        <!-- Will be populated by JavaScript -->
       </div>
     </div>
-    <div class="channel-list" id="channelList">
-      <!-- Populated by JS -->
+    
+    <div class="user-panel">
+      <div class="user-avatar avatar-p" id="currentUserAvatar">U</div>
+      <div class="user-info">
+        <div class="username" id="currentUsername">Anonymous</div>
+        <div class="user-status">Online</div>
+      </div>
     </div>
-  </aside>
+  </div>
 
-  <!-- Main chat -->
-  <main class="chat">
-    <div class="topbar">
-      <span class="hash">#</span><span class="title" id="roomTitle">general</span>
+  <!-- Main Chat Area -->
+  <div class="chat-area">
+    <div class="chat-header">
+      <span class="channel-icon">#</span>
+      <span class="channel-name" id="currentChannelName">general</span>
+      <span class="channel-description" id="channelDescription">Welcome to #general! This is the beginning of this channel.</span>
     </div>
-    <div class="messages" id="messages"></div>
-    <div class="composer">
-      <input id="messageInput" placeholder="Message #general" />
-      <button id="sendBtn">Send</button>
+    
+    <div class="messages-container" id="messagesContainer">
+      <div class="welcome-message">
+        <h2>Welcome to #<span id="welcomeChannelName">general</span>!</h2>
+        <p>This is the start of the #<span id="welcomeChannelName2">general</span> channel. Share ideas, ask questions, and connect with your classmates.</p>
+      </div>
+      
+      <div id="messages">
+        <!-- Messages will be populated here -->
+      </div>
     </div>
-  </main>
+    
+    <div class="message-input-container">
+      <div class="message-input-wrapper">
+        <textarea class="message-input" id="messageInput" placeholder="Message #general" rows="1"></textarea>
+        <button class="send-button" id="sendButton">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Members Sidebar -->
+  <div class="members-sidebar">
+    <div class="members-list" id="membersList">
+      <div class="member-category">
+        ONLINE — <span id="onlineCount">5</span>
+      </div>
+      <div id="onlineMembers">
+        <!-- Online members will be populated here -->
+      </div>
+      
+      <div class="member-category">
+        OFFLINE — <span id="offlineCount">2</span>
+      </div>
+      <div id="offlineMembers">
+        <!-- Offline members will be populated here -->
+      </div>
+    </div>
+  </div>
 
   <script>
-    // ---- Client state ----
-    const socket = io();
-    const defaultServer = "home";
-    const serverChannels = {
-      home:   ["general", "random", "announcements"],
-      games:  ["general", "lobby", "mmorpg"],
-      study:  ["general", "assignments", "resources"],
-      music:  ["general", "recommendations", "live-chat"]
+    // Mock socket.io for demo
+    const socket = {
+      emit: function(event, data) {
+        console.log('Socket emit:', event, data);
+      },
+      on: function(event, callback) {
+        // Store callbacks for demo
+        if (!this.callbacks) this.callbacks = {};
+        this.callbacks[event] = callback;
+      },
+      callbacks: {}
     };
 
-    let currentServer = defaultServer;
-    let currentRoom = "general";
+    // App state
+    let currentServer = 'home';
+    let currentChannel = 'general';
+    let currentUser = 'Anonymous';
 
-    // ---- DOM refs ----
-    const channelList = document.getElementById("channelList");
-    const roomTitle = document.getElementById("roomTitle");
-    const msgBox = document.getElementById("messages");
-    const usernameEl = document.getElementById("username");
-    const inputEl = document.getElementById("messageInput");
-    const sendBtn = document.getElementById("sendBtn");
-
-    // ---- Helpers ----
-    function fmtTime(ts){
-      const d = new Date(ts);
-      const hh = String(d.getHours()).padStart(2,"0");
-      const mm = String(d.getMinutes()).padStart(2,"0");
-      return `${hh}:${mm}`;
-    }
-    function scrollToBottom(){
-      msgBox.scrollTop = msgBox.scrollHeight;
-    }
-    function setPlaceholder(){
-      inputEl.placeholder = `Message #${currentRoom}`;
-      roomTitle.textContent = currentRoom;
-    }
-    function el(tag, cls, text){
-      const e = document.createElement(tag);
-      if (cls) e.className = cls;
-      if (text) e.textContent = text;
-      return e;
-    }
-    function renderChannels(){
-      channelList.innerHTML = "";
-      const chans = serverChannels[currentServer] || [];
-      chans.forEach(ch => {
-        const row = el("div", "chan" + (ch===currentRoom?" active":""), "");
-        row.innerHTML = `<span>#</span><span>${ch}</span>`;
-        row.onclick = () => changeRoom(ch);
-        channelList.appendChild(row);
-      });
-    }
-    function setActiveServerDot(){
-      document.querySelectorAll(".server-dot").forEach(dot=>{
-        dot.classList.toggle("active", dot.dataset.server === currentServer);
-      });
-    }
-
-    // ---- Room changes ----
-    function join(room){
-      const user = (usernameEl.value || "Anonymous").trim() || "Anonymous";
-      socket.emit("join", { room, user });
-      // Clear chat view when changing room (client-side only)
-      msgBox.innerHTML = "";
-      setPlaceholder();
-      scrollToBottom();
-    }
-    function changeRoom(room){
-      currentRoom = room;
-      renderChannels();
-      join(room);
-    }
-
-    // ---- Send message ----
-    function send(){
-      const text = inputEl.value.trim();
-      if (!text) return;
-      const user = (usernameEl.value || "Anonymous").trim() || "Anonymous";
-      socket.emit("chat", { room: currentRoom, user, text });
-      inputEl.value = "";
-    }
-
-    // ---- Socket events ----
-    socket.on("chat", (msg) => {
-      if (msg.room !== currentRoom) return; // ignore other rooms
-      const wrap = el("div", "msg");
-      const meta = el("div", "meta");
-      const author = el("span", "author", msg.user);
-      const time = el("span", "time", fmtTime(msg.ts || Date.now()));
-      meta.appendChild(author); meta.appendChild(time);
-      const text = el("div", "text", msg.text);
-      wrap.appendChild(meta); wrap.appendChild(text);
-      msgBox.appendChild(wrap);
-      scrollToBottom();
-    });
-
-    socket.on("system", (msg) => {
-      if (msg.room !== currentRoom) return;
-      const wrap = el("div", "msg system");
-      const meta = el("div", "meta");
-      const author = el("span", "author", "System");
-      const time = el("span", "time", fmtTime(msg.ts || Date.now()));
-      meta.appendChild(author); meta.appendChild(time);
-      const text = el("div", "text", msg.text);
-      wrap.appendChild(meta); wrap.appendChild(text);
-      msgBox.appendChild(wrap);
-      scrollToBottom();
-    });
-
-    // ---- UI wiring ----
-    sendBtn.onclick = send;
-    inputEl.addEventListener("keydown", (e)=>{
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        send();
+    const serverData = {
+      home: {
+        name: 'PCC Hub',
+        textChannels: ['general', 'announcements', 'random', 'study-help'],
+        voiceChannels: ['Study Room', 'General']
+      },
+      study: {
+        name: 'Study Hub',
+        textChannels: ['general', 'assignments', 'resources', 'help'],
+        voiceChannels: ['Study Session', 'Group Work']
+      },
+      projects: {
+        name: 'Projects',
+        textChannels: ['general', 'showcase', 'collaboration'],
+        voiceChannels: ['Project Discussion']
+      },
+      social: {
+        name: 'Social',
+        textChannels: ['general', 'music', 'games'],
+        voiceChannels: ['Hangout', 'Music']
       }
-    });
+    };
 
-    // Server rail click
-    document.getElementById("servers").addEventListener("click", (e)=>{
-      const dot = e.target.closest(".server-dot");
-      if (!dot) return;
-      const targetServer = dot.dataset.server;
-      if (targetServer === currentServer) return;
-      currentServer = targetServer;
-      setActiveServerDot();
-      // Default to first channel of that server
-      currentRoom = (serverChannels[currentServer] && serverChannels[currentServer][0]) || "general";
+    const mockMembers = [
+      { name: 'Alex Johnson', status: 'online', avatar: 'A', color: 'avatar-a', badge: 'Admin' },
+      { name: 'Sarah Chen', status: 'online', avatar: 'S', color: 'avatar-s', badge: 'Moderator' },
+      { name: 'CHAKON', status: 'online', avatar: 'C', color: 'avatar-c', badge: 'Student' },
+      { name: 'Mike Rodriguez', status: 'online', avatar: 'M', color: 'avatar-m' },
+      { name: 'Emma Wilson', status: 'away', avatar: 'E', color: 'avatar-e' },
+      { name: 'David Kim', status: 'offline', avatar: 'D', color: 'avatar-d' },
+      { name: 'Lisa Zhang', status: 'offline', avatar: 'L', color: 'avatar-l' }
+    ];
+
+    // Mock messages - empty for clean interface
+    const mockMessages = [];
+
+    // DOM elements
+    const serverNameEl = document.getElementById('serverName');
+    const textChannelsEl = document.getElementById('textChannels');
+    const voiceChannelsEl = document.getElementById('voiceChannels');
+    const currentChannelNameEl = document.getElementById('currentChannelName');
+    const channelDescriptionEl = document.getElementById('channelDescription');
+    const welcomeChannelNameEls = document.querySelectorAll('#welcomeChannelName, #welcomeChannelName2');
+    const messagesEl = document.getElementById('messages');
+    const messageInputEl = document.getElementById('messageInput');
+    const sendButtonEl = document.getElementById('sendButton');
+    const onlineMembersEl = document.getElementById('onlineMembers');
+    const offlineMembersEl = document.getElementById('offlineMembers');
+    const onlineCountEl = document.getElementById('onlineCount');
+    const offlineCountEl = document.getElementById('offlineCount');
+
+    // Initialize
+    function init() {
+      updateServer();
       renderChannels();
-      join(currentRoom);
-    });
+      renderMessages();
+      renderMembers();
+      
+      // Event listeners
+      messageInputEl.addEventListener('keydown', handleMessageInput);
+      sendButtonEl.addEventListener('click', sendMessage);
+      
+      // Server switching
+      document.querySelectorAll('.server-icon').forEach(icon => {
+        icon.addEventListener('click', (e) => {
+          const server = e.target.dataset.server;
+          if (server && server !== currentServer) {
+            switchServer(server);
+          }
+        });
+      });
+    }
 
-    // ---- Boot ----
-    setActiveServerDot();
-    renderChannels();
-    join(currentRoom);
-    setPlaceholder();
+    function updateServer() {
+      const server = serverData[currentServer];
+      serverNameEl.textContent = server.name;
+      currentChannelNameEl.textContent = currentChannel;
+      channelDescriptionEl.textContent = `Welcome to #${currentChannel}! This is the beginning of this channel.`;
+      welcomeChannelNameEls.forEach(el => el.textContent = currentChannel);
+      messageInputEl.placeholder = `Message #${currentChannel}`;
+    }
+
+    function renderChannels() {
+      const server = serverData[currentServer];
+      
+      // Text channels
+      textChannelsEl.innerHTML = '';
+      server.textChannels.forEach(channel => {
+        const channelEl = document.createElement('div');
+        channelEl.className = `channel ${channel === currentChannel ? 'active' : ''}`;
+        channelEl.innerHTML = `<span class="channel-icon">#</span>${channel}`;
+        channelEl.addEventListener('click', () => switchChannel(channel));
+        textChannelsEl.appendChild(channelEl);
+      });
+      
+      // Voice channels
+      voiceChannelsEl.innerHTML = '';
+      server.voiceChannels.forEach(channel => {
+        const channelEl = document.createElement('div');
+        channelEl.className = 'channel voice-channel';
+        channelEl.innerHTML = `<span class="channel-icon">🔊</span>${channel}`;
+        voiceChannelsEl.appendChild(channelEl);
+      });
+    }
+
+    function renderMessages() {
+      messagesEl.innerHTML = '';
+      mockMessages.forEach(msg => {
+        const messageEl = document.createElement('div');
+        messageEl.className = 'message';
+        
+        const reactionsHtml = msg.reactions ? 
+          `<div class="message-reactions">
+            ${msg.reactions.map(r => `<div class="reaction">${r.emoji} ${r.count}</div>`).join('')}
+          </div>` : '';
+        
+        const badgeHtml = msg.badge ? 
+          `<span class="user-badge ${msg.badge.toLowerCase()}">${msg.badge}</span>` : '';
+        
+        messageEl.innerHTML = `
+          <div class="message-avatar ${msg.color}">${msg.avatar}</div>
+          <div class="message-content">
+            <div class="message-header">
+              <span class="message-author">${msg.author}</span>
+              ${badgeHtml}
+              <span class="message-timestamp">${msg.timestamp}</span>
+            </div>
+            <div class="message-text">${msg.text}</div>
+            ${reactionsHtml}
+          </div>
+        `;
+        messagesEl.appendChild(messageEl);
+      });
+      
+      // Scroll to bottom
+      document.getElementById('messagesContainer').scrollTop = 
+        document.getElementById('messagesContainer').scrollHeight;
+    }
+
+    function renderMembers() {
+      const online = mockMembers.filter(m => m.status === 'online' || m.status === 'away');
+      const offline = mockMembers.filter(m => m.status === 'offline');
+      
+      onlineCountEl.textContent = online.length;
+      offlineCountEl.textContent = offline.length;
+      
+      onlineMembersEl.innerHTML = '';
+      online.forEach(member => {
+        const memberEl = document.createElement('div');
+        memberEl.className = 'member';
+        memberEl.innerHTML = `
+          <div class="member-avatar ${member.color} ${member.status}">${member.avatar}</div>
+          <div class="member-info">
+            <div class="member-name">${member.name}</div>
+          </div>
+        `;
+        onlineMembersEl.appendChild(memberEl);
+      });
+      
+      offlineMembersEl.innerHTML = '';
+      offline.forEach(member => {
+        const memberEl = document.createElement('div');
+        memberEl.className = 'member offline';
+        memberEl.innerHTML = `
+          <div class="member-avatar ${member.color} ${member.status}">${member.avatar}</div>
+          <div class="member-info">
+            <div class="member-name">${member.name}</div>
+          </div>
+        `;
+        offlineMembersEl.appendChild(memberEl);
+      });
+    }
+
+    function switchServer(server) {
+      currentServer = server;
+      currentChannel = serverData[server].textChannels[0];
+      
+      // Update active server icon
+      document.querySelectorAll('.server-icon').forEach(icon => {
+        icon.classList.toggle('active', icon.dataset.server === server);
+      });
+      
+      updateServer();
+      renderChannels();
+    }
+
+    function switchChannel(channel) {
+      currentChannel = channel;
+      updateServer();
+      renderChannels();
+    }
+
+    function handleMessageInput(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+      
+      // Auto-resize textarea
+      messageInputEl.style.height = 'auto';
+      messageInputEl.style.height = Math.min(messageInputEl.scrollHeight, 144) + 'px';
+    }
+
+    function sendMessage() {
+      const text = messageInputEl.value.trim();
+      if (!text) return;
+      
+      // Add message to UI (in real app, this would come from server)
+      const messageEl = document.createElement('div');
+      messageEl.className = 'message';
+      messageEl.innerHTML = `
+        <div class="message-avatar avatar-p">U</div>
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-author">${currentUser}</span>
+            <span class="message-timestamp">now</span>
+          </div>
+          <div class="message-text">${text}</div>
+        </div>
+      `;
+      messagesEl.appendChild(messageEl);
+      
+      messageInputEl.value = '';
+      messageInputEl.style.height = 'auto';
+      
+      // Scroll to bottom
+      document.getElementById('messagesContainer').scrollTop = 
+        document.getElementById('messagesContainer').scrollHeight;
+      
+      // Emit to socket (in real app)
+      socket.emit('message', {
+        channel: currentChannel,
+        server: currentServer,
+        user: currentUser,
+        text: text
+      });
+    }
+
+    // Initialize the app
+    init();
   </script>
 </body>
 </html>

@@ -12,26 +12,49 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
+// Track members per room
+const members = {}; 
+// Structure: { roomName: { socketId: { name, online:true } } }
+
 io.on("connection", (socket) => {
   let currentRoom = null;
   let username = "Anonymous";
 
+  // ---- Helpers ----
+  function updateMembers(room) {
+    const list = Object.values(members[room] || {});
+    io.to(room).emit("members", list);
+  }
+
   // Join/change room
   socket.on("join", ({ room, user }) => {
     const newUser = (user || "Anonymous").trim() || "Anonymous";
-    if (currentRoom) socket.leave(currentRoom);
+
+    // Leave old room if switching
+    if (currentRoom) {
+      socket.leave(currentRoom);
+      if (members[currentRoom]) {
+        delete members[currentRoom][socket.id];
+        updateMembers(currentRoom);
+      }
+    }
+
     username = newUser;
     currentRoom = room;
-
     socket.join(room);
-    // Notify others in room
+
+    // Add to members list
+    if (!members[room]) members[room] = {};
+    members[room][socket.id] = { name: username, online: true };
+    updateMembers(room);
+
+    // System messages
     socket.to(room).emit("system", {
       text: `${username} joined #${room}`,
       room,
       ts: Date.now(),
     });
 
-    // (Optional) send a small history or welcome just to the joining user
     socket.emit("system", {
       text: `You joined #${room}. Say hi!`,
       room,
@@ -51,8 +74,16 @@ io.on("connection", (socket) => {
     io.to(room).emit("chat", payload);
   });
 
+  // Disconnect cleanup
   socket.on("disconnect", () => {
     if (currentRoom) {
+      // Mark user offline
+      if (members[currentRoom] && members[currentRoom][socket.id]) {
+        members[currentRoom][socket.id].online = false;
+        updateMembers(currentRoom);
+        delete members[currentRoom][socket.id];
+      }
+
       socket.to(currentRoom).emit("system", {
         text: `${username} left #${currentRoom}`,
         room: currentRoom,
